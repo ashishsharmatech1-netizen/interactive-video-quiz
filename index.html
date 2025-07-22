@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Interactive Video Quiz</title>
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-text-size-adjust: 100%;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .video-container {
+            position: relative;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            background-color: #000;
+        }
+        
+        video {
+            width: 100%;
+            display: block;
+        }
+        
+        /* Hide seek bar on all platforms */
+        video::-webkit-media-controls-timeline,
+        video::-webkit-media-controls-current-time-display,
+        video::-webkit-media-controls-time-remaining-display,
+        video::-webkit-media-controls-timeline-container,
+        video::-webkit-media-controls-progress-bar {
+            display: none !important;
+        }
+        
+        /* Hide fullscreen button on iOS */
+        video::-webkit-media-controls-fullscreen-button {
+            display: none !important;
+        }
+        
+        /* Custom play/pause button for mobile */
+        .custom-play-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 5;
+        }
+        
+        .custom-play-btn::after {
+            content: "▶";
+            font-size: 24px;
+            color: #2c3e50;
+        }
+        
+        .video-container.show-custom-controls .custom-play-btn {
+            display: flex;
+        }
+        
+        .unmute-btn {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 5;
+            display: none;
+            cursor: pointer;
+        }
+        
+        .question-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+            z-index: 10;
+        }
+        
+        .question-box {
+            background-color: white;
+            width: 95%;
+            max-width: 600px;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transform: translateY(20px);
+            opacity: 0;
+            transition: all 0.4s ease;
+            max-height: 80vh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .question-overlay.show .question-box {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .question {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            text-align: center;
+            line-height: 1.4;
+        }
+        
+        .options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .option {
+            padding: 12px 15px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid #e9ecef;
+            font-size: 15px;
+            word-break: break-word;
+            display: flex;
+            align-items: center;
+            min-height: 50px;
+        }
+        
+        .option:hover {
+            background-color: #e9ecef;
+            border-color: #dee2e6;
+        }
+        
+        .option.selected {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        
+        .option.wrong {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        
+        .progress-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 4px 8px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #2c3e50;
+            z-index: 5;
+        }
+        
+        .submit-container {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .submit-btn {
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #28a745, #218838);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 8px rgba(40, 167, 69, 0.2);
+            -webkit-appearance: none;
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(40, 167, 69, 0.3);
+        }
+        
+        .progress {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 15px;
+            color: #6c757d;
+            font-weight: 500;
+        }
+        
+        .progress span {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .feedback-message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+            width: 100%;
+            font-size: 14px;
+        }
+        
+        .feedback-correct {
+            background-color: #d4edda;
+            color: #155724;
+            display: block;
+        }
+        
+        .feedback-wrong {
+            background-color: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+        
+        .form-container {
+            display: none;
+            margin-top: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+        }
+        
+        .form-container.show {
+            display: block;
+        }
+        
+        /* iPhone-specific adjustments */
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 10px;
+                padding-bottom: constant(safe-area-inset-bottom);
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+            
+            h1 {
+                font-size: 18px;
+                margin-bottom: 15px;
+                padding-top: constant(safe-area-inset-top);
+                padding-top: env(safe-area-inset-top);
+            }
+            
+            .video-container {
+                border-radius: 0;
+            }
+            
+            .question-box {
+                padding: 15px;
+                max-height: 70vh;
+                width: 100%;
+                border-radius: 0;
+            }
+            
+            .question {
+                font-size: 16px;
+                margin-bottom: 15px;
+            }
+            
+            .options {
+                gap: 8px;
+            }
+            
+            .option {
+                padding: 10px 12px;
+                font-size: 14px;
+                min-height: 45px;
+            }
+            
+            .submit-btn {
+                padding: 12px 20px;
+                font-size: 16px;
+            }
+            
+            .progress {
+                font-size: 14px;
+            }
+            
+            .form-container iframe {
+                height: 1887px;
+            }
+        }
+        
+        @media only screen and (max-width: 375px) {
+            .question {
+                font-size: 15px;
+            }
+            
+            .option {
+                font-size: 13px;
+                min-height: 40px;
+                padding: 8px 10px;
+            }
+            
+            .progress-indicator {
+                font-size: 11px;
+            }
+            
+            .question-box {
+                padding: 12px;
+            }
+            
+            .feedback-message {
+                font-size: 13px;
+                padding: 8px;
+            }
+            
+            .unmute-btn {
+                font-size: 11px;
+                padding: 4px 8px;
+            }
+        }
+        
+        /* iPhone notch/punch-hole safe areas */
+        @supports (padding: max(0px)) {
+            .question-overlay {
+                padding-left: max(15px, env(safe-area-inset-left));
+                padding-right: max(15px, env(safe-area-inset-right));
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Innovatiview Traning Video Quiz </h1>
+    <h1>Created by Yogesh Rajput</h1>
+    <div class="video-container" id="video-container">
+        <video id="quiz-video" playsinline webkit-playsinline>
+            <source src="IRIS Before Exam-Cellular High.mp4" type="video/mp4">
+
+
+            Your browser does not support the video tag.
+        </video>
+        
+        <div class="custom-play-btn" id="custom-play-btn"></div>
+        <div class="unmute-btn" id="unmute-btn">Tap to Unmute</div>
+        
+        <div class="progress-indicator" id="progress-indicator">Question 1/5</div>
+        
+        <div class="question-overlay" id="question-overlay">
+            <div class="question-box">
+                <div class="question" id="question"></div>
+                <div class="options" id="options"></div>
+                <div class="feedback-message" id="feedback-message"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="submit-container" id="submit-container">
+        <button class="submit-btn" id="submit-btn">Submit Quiz</button>
+    </div>
+    
+    <div class="progress" id="progress">Answered: <span>0</span>/5</div>
+    
+    <div class="form-container" id="form-container">
+        <iframe src="https://docs.google.com/forms/d/e/1FAIpQLScxjyqqp8scs22XMAabD5GayOdXMCMWmRrvWMRqbIum68bLbQ/viewform?embedded=true" width="100%" height="1887" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>
+    </div>
+    
+    <script>
+        // Quiz data
+        const quizData = [
+            {
+                timestamp: 50, // at 0:50
+                question: "What things do we need for the biometric process?",
+                options: ["Tablet / OTG / FPS / Hologram", "Tablet/ OTG / Phone / charge", "FPS / Hologram / QR / laptop"],
+                correctAnswer: 0
+            },
+            {
+                timestamp: 89, // at 1:29
+                question: "Whom will the supervisor meet at the center",
+                options: ["Teacher", "Principal", "Vendor"],
+                correctAnswer: 1
+            },
+            {
+                timestamp: 180, // at 3:00
+                question: "Who will the supervisor share the group selfie with on exam day?",
+                options: ["With my team", "With the center code", "With both my team and center code"],
+                correctAnswer: 2
+            },
+            {
+                timestamp: 250, // at 4:10
+                question: "How will the biometric process be done?",
+                options: ["Scanning admit cards", "Taking a photo", "Capturing fingerprint", "All of these"],
+                correctAnswer: 3
+            },
+            {
+                timestamp: 279, // at 4:39
+                question: "Where will the CSR report be uploaded?",
+                options: ["Trustview", "Vendor", "Principal"],
+                correctAnswer: 0
+            }
+        ];
+
+        // DOM elements
+        const video = document.getElementById('quiz-video');
+        const videoContainer = document.getElementById('video-container');
+        const customPlayBtn = document.getElementById('custom-play-btn');
+        const unmuteBtn = document.getElementById('unmute-btn');
+        const questionOverlay = document.getElementById('question-overlay');
+        const questionElement = document.getElementById('question');
+        const optionsElement = document.getElementById('options');
+        const progressIndicator = document.getElementById('progress-indicator');
+        const submitContainer = document.getElementById('submit-container');
+        const submitBtn = document.getElementById('submit-btn');
+        const progressElement = document.getElementById('progress');
+        const feedbackMessage = document.getElementById('feedback-message');
+        const formContainer = document.getElementById('form-container');
+
+        // Quiz state
+        let currentQuestionIndex = -1;
+        let answeredQuestions = 0;
+        let userAnswers = Array(quizData.length).fill(null);
+        let previousTimestamp = 0;
+        let isiPhone = /iPhone|iPod/.test(navigator.userAgent);
+        let isAndroid = /Android/.test(navigator.userAgent);
+        let videoStarted = false;
+
+        // Initialize the quiz
+        function initQuiz() {
+            // Set up event listeners
+            video.addEventListener('timeupdate', checkTimestamp);
+            submitBtn.addEventListener('click', submitQuiz);
+            customPlayBtn.addEventListener('click', startVideoPlayback);
+            unmuteBtn.addEventListener('click', unmuteVideo);
+            
+            // Handle video play state
+            video.addEventListener('play', () => {
+                videoContainer.classList.remove('show-custom-controls');
+                videoStarted = true;
+            });
+            
+            video.addEventListener('pause', () => {
+                if (currentQuestionIndex === -1 || !questionOverlay.style.display || questionOverlay.style.display === 'none') {
+                    videoContainer.classList.add('show-custom-controls');
+                }
+            });
+            
+            // Handle volume changes
+            video.addEventListener('volumechange', () => {
+                if (video.muted) {
+                    unmuteBtn.style.display = 'block';
+                } else {
+                    unmuteBtn.style.display = 'none';
+                }
+            });
+            
+            // iPhone/Android specific setup
+            if (isiPhone || isAndroid) {
+                video.setAttribute('playsinline', '');
+                video.setAttribute('webkit-playsinline', '');
+                video.controls = false;
+                video.muted = true; // Start muted on mobile
+                unmuteBtn.style.display = 'block';
+            } else {
+                video.controls = true;
+                // For desktop, try muted autoplay first
+                video.muted = true;
+                const playPromise = video.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(e => {
+                        videoContainer.classList.add('show-custom-controls');
+                    });
+                }
+            }
+            
+            // Add click handler to video container for iOS sound activation
+            videoContainer.addEventListener('click', handleVideoContainerClick);
+        }
+
+        function handleVideoContainerClick() {
+            if (!videoStarted && (isiPhone || isAndroid)) {
+                startVideoPlayback();
+            }
+        }
+
+        function startVideoPlayback() {
+            // On iOS, we need to play first (muted) then unmute after user interaction
+            const playPromise = video.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.catch(e => {
+                    // If play fails, try with muted audio
+                    video.muted = true;
+                    video.play().catch(err => {
+                        console.log("Playback failed:", err);
+                        videoContainer.classList.add('show-custom-controls');
+                    });
+                });
+            }
+        }
+
+        function unmuteVideo() {
+            video.muted = false;
+            unmuteBtn.style.display = 'none';
+            
+            // On iOS, we need to play again after unmuting
+            if (isiPhone || isAndroid) {
+                video.play().catch(e => {
+                    console.log("Play after unmute failed:", e);
+                });
+            }
+        }
+
+        // Check video timestamp for questions
+        function checkTimestamp() {
+            const currentTime = Math.floor(video.currentTime);
+            
+            // Check if we've reached a question timestamp
+            for (let i = 0; i < quizData.length; i++) {
+                if (currentTime >= quizData[i].timestamp && userAnswers[i] === null) {
+                    // Pause the video and show the question
+                    video.pause();
+                    showQuestion(i);
+                    break;
+                }
+            }
+        }
+
+        // Show a question
+        function showQuestion(index) {
+            currentQuestionIndex = index;
+            const question = quizData[index];
+            
+            // Update UI
+            questionElement.textContent = question.question;
+            questionElement.style.display = 'block';
+            progressIndicator.textContent = Question ${index + 1}/${quizData.length};
+            optionsElement.innerHTML = '';
+            optionsElement.style.display = 'flex';
+            feedbackMessage.textContent = '';
+            feedbackMessage.className = 'feedback-message';
+            
+            // Create options
+            question.options.forEach((option, i) => {
+                const optionElement = document.createElement('div');
+                optionElement.classList.add('option');
+                optionElement.textContent = option;
+                optionElement.addEventListener('click', () => selectAnswer(i));
+                optionsElement.appendChild(optionElement);
+            });
+            
+            // Show question overlay with animation
+            questionOverlay.style.display = 'flex';
+            setTimeout(() => {
+                questionOverlay.classList.add('show');
+            }, 10);
+            
+            // Store the timestamp where we paused
+            previousTimestamp = video.currentTime;
+            
+            // Lock orientation on iPhone if supported
+            if (isiPhone && screen.orientation && screen.orientation.lock) {
+                try {
+                    screen.orientation.lock('portrait');
+                } catch (e) {
+                    console.log("Orientation lock not supported");
+                }
+            }
+        }
+
+        // Handle answer selection
+        function selectAnswer(optionIndex) {
+            const question = quizData[currentQuestionIndex];
+            const options = optionsElement.querySelectorAll('.option');
+            
+            // Mark selected option
+            options.forEach((opt, i) => {
+                if (i === optionIndex) {
+                    opt.classList.add('selected');
+                } else {
+                    opt.classList.remove('selected');
+                }
+            });
+            
+            // Check if answer is correct
+            const isCorrect = optionIndex === question.correctAnswer;
+            
+            if (isCorrect) {
+                // Hide question and options
+                questionElement.style.display = 'none';
+                optionsElement.style.display = 'none';
+                
+                // Correct answer - show feedback
+                feedbackMessage.textContent = "Wow, your answer is right!";
+                feedbackMessage.classList.add('feedback-correct');
+                
+                // Store the answer
+                userAnswers[currentQuestionIndex] = optionIndex;
+                answeredQuestions++;
+                updateProgress();
+                
+                // Hide quiz and resume video after delay
+                setTimeout(() => {
+                    questionOverlay.classList.remove('show');
+                    setTimeout(() => {
+                        questionOverlay.style.display = 'none';
+                        // Restore question and options visibility for next time
+                        questionElement.style.display = 'block';
+                        optionsElement.style.display = 'flex';
+                        video.play();
+                    }, 400);
+                }, 1500);
+                
+                // Check if all questions are answered
+                if (answeredQuestions === quizData.length) {
+                    showSubmitButton();
+                }
+            } else {
+                // Hide question and options
+                questionElement.style.display = 'none';
+                optionsElement.style.display = 'none';
+                
+                // Wrong answer - show feedback
+                feedbackMessage.textContent = "Your answer is wrong, first watch the video";
+                feedbackMessage.classList.add('feedback-wrong');
+                
+                // Mark the wrong answer
+                options[optionIndex].classList.add('wrong');
+                
+                // Find the previous answered question's timestamp or start
+                let jumpBackTime = 0;
+                for (let i = currentQuestionIndex - 1; i >= 0; i--) {
+                    if (userAnswers[i] !== null) {
+                        jumpBackTime = quizData[i].timestamp;
+                        break;
+                    }
+                }
+                
+                // After a delay, jump back and reset
+                setTimeout(() => {
+                    questionOverlay.classList.remove('show');
+                    setTimeout(() => {
+                        questionOverlay.style.display = 'none';
+                        // Restore question and options visibility for next time
+                        questionElement.style.display = 'block';
+                        optionsElement.style.display = 'flex';
+                        video.currentTime = jumpBackTime;
+                        video.play();
+                    }, 400);
+                }, 2000);
+            }
+        }
+
+        // Update progress display
+        function updateProgress() {
+            progressElement.innerHTML = Answered: <span>${answeredQuestions}</span>/${quizData.length};
+        }
+
+        // Show submit button when all questions are answered
+        function showSubmitButton() {
+            submitContainer.style.display = 'block';
+        }
+
+        // Handle quiz submission
+        function submitQuiz() {
+            // Hide the quiz elements
+            submitContainer.style.display = 'none';
+            video.style.display = 'none';
+            progressElement.style.display = 'none';
+            
+            // Show the Google Form
+            formContainer.classList.add('show');
+            
+            // Scroll to the form
+            formContainer.scrollIntoView({ behavior: 'smooth' });
+            
+            // Unlock orientation if locked
+            if (isiPhone && screen.orientation && screen.orientation.unlock) {
+                try {
+                    screen.orientation.unlock();
+                } catch (e) {
+                    console.log("Orientation unlock failed");
+                }
+            }
+        }
+
+        // Initialize the quiz when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initQuiz();
+        });
+    </script>
+</body>
+</html>
